@@ -160,7 +160,7 @@ def get_sheets_dict():
         _sheets_dict = { sheet["id"]: dict(sheet) for sheet in cur.fetchall() }
     return _sheets_dict
 
-def get_event(event_id=None, event=None, login_user_id=None, cache=True):
+def get_event(event_id=None, event=None, login_user_id=None, cache=True, detail=True):
     cur = dbh().cursor()
 
     if event is None:
@@ -194,19 +194,21 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
 
         reservation = reservations.get(sheet["id"])
         if reservation:
-            if login_user_id and reservation['user_id'] == login_user_id:
-                sheet['mine'] = True
-            sheet['reserved'] = True
-            sheet['reserved_at'] = int(reservation['reserved_at'].replace(tzinfo=timezone.utc).timestamp())
+            if detail:
+                if login_user_id and reservation['user_id'] == login_user_id:
+                    sheet['mine'] = True
+                sheet['reserved'] = True
+                sheet['reserved_at'] = int(reservation['reserved_at'].replace(tzinfo=timezone.utc).timestamp())
         else:
             event['remains'] += 1
             event['sheets'][sheet['rank']]['remains'] += 1
 
-        event['sheets'][sheet['rank']]['detail'].append(sheet)
+        if detail:
+            event['sheets'][sheet['rank']]['detail'].append(sheet)
 
-        del sheet['id']
-        del sheet['price']
-        del sheet['rank']
+            del sheet['id']
+            del sheet['price']
+            del sheet['rank']
 
     event['public'] = True if event['public_fg'] else False
     event['closed'] = True if event['closed_fg'] else False
@@ -309,14 +311,12 @@ def get_users(user_id):
     if user['id'] != get_login_user()['id']:
         return ('', 403)
 
-    events = { row["id"]: row for row in get_events() }
-
     cur.execute(
         "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = %s ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5",
         [user['id']])
     recent_reservations = []
     for row in cur.fetchall():
-        event = dict(events[row['event_id']])
+        event = get_event(row['event_id'])
         price = event['sheets'][row['sheet_rank']]['price']
         del event['sheets']
         del event['total']
@@ -350,7 +350,7 @@ def get_users(user_id):
     rows = cur.fetchall()
     recent_events = []
     for row in rows:
-        event = dict(events[row['event_id']])
+        event = get_event(row['event_id'], detail=False)
         recent_events.append(event)
     user['recent_events'] = recent_events
 
