@@ -5,15 +5,19 @@ ip1=118.27.29.133
 ip2=118.27.20.60
 ip3=118.27.29.133
 
-scp -r etc isucon@${ip1}:
-scp torb/db/schema.sql isucon@${ip1}:torb/db/
-scp torb/webapp/env.sh isucon@${ip1}:torb/webapp/
-scp torb/webapp/python/app.py isucon@${ip1}:torb/webapp/python/
-scp -r torb/webapp/python/templates isucon@${ip1}:torb/webapp/python/
-scp etc/systemd/system/torb.python.service isucon@${ip1}:etc/systemd/system/
-scp etc/h2o/h2o.conf isucon@${ip1}:etc/h2o/
+ip=${1:-$ip1}
 
-ssh isucon@${ip1} <<EOF
+echo "target ip = $ip"
+
+scp -r etc isucon@${ip}:
+scp torb/db/schema.sql isucon@${ip}:torb/db/
+scp torb/webapp/env.sh isucon@${ip}:torb/webapp/
+scp torb/webapp/python/app.py isucon@${ip}:torb/webapp/python/
+scp -r torb/webapp/python/templates isucon@${ip}:torb/webapp/python/
+scp etc/systemd/system/torb.python.service isucon@${ip}:etc/systemd/system/
+scp etc/h2o/h2o.conf isucon@${ip}:etc/h2o/
+
+ssh isucon@${ip} <<EOF
 set -e
 sudo cp etc/systemd/system/torb.python.service /etc/systemd/system/torb.python.service
 sudo cp etc/h2o/h2o.conf /etc/h2o/h2o.conf
