@@ -307,12 +307,14 @@ def get_users(user_id):
     if user['id'] != get_login_user()['id']:
         return ('', 403)
 
+    events = { row["id"]: row for row in get_events() }
+
     cur.execute(
         "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = %s ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5",
         [user['id']])
     recent_reservations = []
     for row in cur.fetchall():
-        event = get_event(row['event_id'])
+        event = dict(events[row['event_id']])
         price = event['sheets'][row['sheet_rank']]['price']
         del event['sheets']
         del event['total']
@@ -346,9 +348,7 @@ def get_users(user_id):
     rows = cur.fetchall()
     recent_events = []
     for row in rows:
-        event = get_event(row['event_id'])
-        for sheet in event['sheets'].values():
-            del sheet['detail']
+        event = dict(events[row['event_id']])
         recent_events.append(event)
     user['recent_events'] = recent_events
 
