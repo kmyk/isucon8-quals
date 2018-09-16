@@ -170,6 +170,9 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     for rank in ["S", "A", "B", "C"]:
         event["sheets"][rank] = {'total': 0, 'remains': 0, 'detail': []}
 
+    cur.execute("SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", [event['id']])
+    reservations = { row["sheet_id"]: row for row in cur.fetchall() }
+
     for sheet in get_sheets():
         sheet = dict(sheet)
         if not event['sheets'][sheet['rank']].get('price'):
@@ -177,10 +180,7 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
         event['total'] += 1
         event['sheets'][sheet['rank']]['total'] += 1
 
-        cur.execute(
-            "SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)",
-            [event['id'], sheet['id']])
-        reservation = cur.fetchone()
+        reservation = reservations.get(sheet["id"])
         if reservation:
             if login_user_id and reservation['user_id'] == login_user_id:
                 sheet['mine'] = True
