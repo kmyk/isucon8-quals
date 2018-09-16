@@ -125,11 +125,20 @@ def get_sheets():
         _sheets = [ dict(sheet) for sheet in cur.fetchall() ]
     return _sheets
 
-def get_event(event_id, login_user_id=None):
+def get_event(event_id, login_user_id=None, cache=True):
     cur = dbh().cursor()
-    cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
-    event = cur.fetchone()
-    if not event: return None
+
+    if cache:
+        if not hasattr(flask.g, 'events'):
+            cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events")
+            flask.g.events = { row["id"]: row for row in cur.fetchall() }
+        event = flask.g.events.get(event_id)
+        if not event: return None
+        event = dict(event)
+    else:
+        del flask.g.events
+        cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
+        event = cur.fetchone()
 
     event["total"] = 0
     event["remains"] = 0
@@ -558,7 +567,7 @@ def post_event_edit(event_id):
         conn.commit()
     except MySQLdb.Error as e:
         conn.rollback()
-    return jsonify(get_event(event_id))
+    return jsonify(get_event(event_id, cache=False))
 
 
 @app.route('/admin/api/reports/events/<int:event_id>/sales')
