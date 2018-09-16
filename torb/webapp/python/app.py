@@ -116,6 +116,14 @@ def get_events(filter=lambda e: True):
         raise e
     return events
 
+_sheets = None
+def get_sheets():
+    global _sheets
+    if _sheets is None:
+        cur = dbh().cursor()
+        cur.execute("SELECT * FROM sheets ORDER BY `rank`, num")
+        _sheets = [ dict(sheet) for sheet in cur.fetchall() ]
+    return _sheets
 
 def get_event(event_id, login_user_id=None):
     cur = dbh().cursor()
@@ -129,9 +137,8 @@ def get_event(event_id, login_user_id=None):
     for rank in ["S", "A", "B", "C"]:
         event["sheets"][rank] = {'total': 0, 'remains': 0, 'detail': []}
 
-    cur.execute("SELECT id, `rank`, num, price FROM sheets ORDER BY `rank`, num")
-    sheets = cur.fetchall()
-    for sheet in sheets:
+    for sheet in get_sheets():
+        sheet = dict(sheet)
         if not event['sheets'][sheet['rank']].get('price'):
             event['sheets'][sheet['rank']]['price'] = event['price'] + sheet['price']
         event['total'] += 1
