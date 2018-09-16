@@ -116,6 +116,14 @@ def get_events(filter=lambda e: True):
         raise e
     return events
 
+_sheets = None
+def get_sheets():
+    global _sheets
+    if _sheets is None:
+        cur = dbh().cursor()
+        cur.execute("SELECT * FROM sheets ORDER BY `rank`, num")
+        _sheets = [ dict(sheet) for sheet in cur.fetchall() ]
+    return _sheets
 
 def get_event(event_id, login_user_id=None):
     cur = dbh().cursor()
@@ -129,9 +137,8 @@ def get_event(event_id, login_user_id=None):
     for rank in ["S", "A", "B", "C"]:
         event["sheets"][rank] = {'total': 0, 'remains': 0, 'detail': []}
 
-    cur.execute("SELECT id, `rank`, num, price FROM sheets ORDER BY `rank`, num")
-    sheets = cur.fetchall()
-    for sheet in sheets:
+    for sheet in get_sheets():
+        sheet = dict(sheet)
         if not event['sheets'][sheet['rank']].get('price'):
             event['sheets'][sheet['rank']]['price'] = event['price'] + sheet['price']
         event['total'] += 1
@@ -188,12 +195,12 @@ def get_login_administrator():
     cur.execute("SELECT id, nickname FROM administrators WHERE id = %s", [administrator_id])
     return cur.fetchone()
 
-
+_total_sheets = None
 def validate_rank(rank):
-    cur = dbh().cursor()
-    cur.execute("SELECT COUNT(*) AS total_sheets FROM sheets WHERE `rank` = %s", [rank])
-    ret = cur.fetchone()
-    return int(ret['total_sheets']) > 0
+    global _total_sheets
+    if _total_sheets is None:
+        _total_sheets = { sheet['rank'] for sheet in get_sheets() }
+    return rank in _total_sheets
 
 
 def render_report_csv(reports):
@@ -404,6 +411,12 @@ def post_reserve(event_id):
         "sheet_num": sheet['num']})
     return flask.Response(content, status=202, mimetype='application/json')
 
+_sheet_from_rank_and_num = None
+def get_sheet_from_rank_and_num(rank, num):
+    global _sheet_from_rank_and_num
+    if _sheet_from_rank_and_num is None:
+        _sheet_from_rank_and_num = { '%s%d' % (sheet['rank'], sheet['num']): sheet for sheet in get_sheets() }
+    return _sheet_from_rank_and_num.get('%s%d' % (rank, num))
 
 @app.route('/api/events/<int:event_id>/sheets/<rank>/<int:num>/reservation', methods=['DELETE'])
 @login_required
@@ -416,9 +429,7 @@ def delete_reserve(event_id, rank, num):
     if not validate_rank(rank):
         return res_error("invalid_rank", 404)
 
-    cur = dbh().cursor()
-    cur.execute('SELECT id, `rank`, num FROM sheets WHERE `rank` = %s AND num = %s', [rank, num])
-    sheet = cur.fetchone()
+    sheet = get_sheet_from_rank_and_num(rank, num)
     if not sheet:
         return res_error("invalid_sheet", 404)
 
