@@ -203,14 +203,6 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     return event
 
 
-def sanitize_event(event):
-    sanitized = copy.copy(event)
-    del sanitized['price']
-    del sanitized['public']
-    del sanitized['closed']
-    return sanitized
-
-
 def get_login_user():
     if "user_id" not in flask.session:
         return None
@@ -259,9 +251,11 @@ def render_report_csv(reports):
 @app.route('/')
 def get_index():
     user = get_login_user()
-    events = []
-    for event in get_events(only_public=True):
-        events.append(sanitize_event(event))
+    events = get_events(only_public=True)
+    for event in events:
+        del event['price']
+        del event['public']
+        del event['closed']
     return flask.render_template('index.html', user=user, events=events, base_url=make_base_url(flask.request))
 
 
@@ -381,9 +375,11 @@ def post_logout():
 
 @app.route('/api/events')
 def get_events_api():
-    events = []
-    for event in get_events(only_public=True):
-        events.append(sanitize_event(event))
+    events = get_events(only_public=True)
+    for event in events:
+        del event['price']
+        del event['public']
+        del event['closed']
     return jsonify(events)
 
 
@@ -396,7 +392,9 @@ def get_events_by_id(event_id):
     if not event or not event["public"]:
         return res_error("not_found", 404)
 
-    event = sanitize_event(event)
+    del event['price']
+    del event['public']
+    del event['closed']
     return jsonify(event)
 
 
