@@ -15,15 +15,20 @@ scp torb/webapp/python/*.py isucon@${ip}:torb/webapp/python/
 scp torb/webapp/python/*.sh isucon@${ip}:torb/webapp/python/
 scp -r torb/webapp/python/templates isucon@${ip}:torb/webapp/python/
 scp etc/systemd/system/torb.python.service isucon@${ip}:etc/systemd/system/
+scp etc/systemd/system/torb.python.socket isucon@${ip}:etc/systemd/system/
+scp -r etc/tmpfiles.d/torb.python.conf isucon@${ip}:etc/tmpfiles.d/
 scp etc/h2o/h2o.conf isucon@${ip}:etc/h2o/
 
 ssh isucon@${ip} <<EOF
 set -e
 sudo cp etc/systemd/system/torb.python.service /etc/systemd/system/torb.python.service
+sudo cp etc/systemd/system/torb.python.socket /etc/systemd/system/torb.python.socket
+sudo cp -r etc/tmpfiles.d/torb.python.conf /etc/tmpfiles.d/torb.python.conf
 sudo cp etc/h2o/h2o.conf /etc/h2o/h2o.conf
 sudo systemctl daemon-reload
 sudo systemctl restart mariadb
 sudo systemctl restart torb.python.service
+sudo systemctl restart torb.python.socket
 sudo systemctl restart h2o
 ./torb/db/init.sh
 EOF
