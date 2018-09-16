@@ -96,25 +96,48 @@ def teardown(error):
         flask.g.db.close()
 
 
-def get_events(filter=lambda e: True):
-    conn = dbh()
-    conn.autocommit(False)
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT id, public_fg FROM events ORDER BY id ASC") # public_fgは一部のみフィルタで使われている
-        rows = cur.fetchall()
-        event_ids = [row['id'] for row in rows if filter(row)]
-        events = []
-        for event_id in event_ids:
-            event = get_event(event_id)
-            for sheet in event['sheets'].values():
-                del sheet['detail']
-            events.append(event)
-        conn.commit()
-    except MySQLdb.Error as e:
-        conn.rollback()
-        raise e
-    return events
+def get_events(only_public=False):
+    cur = dbh().cursor()
+
+    if only_public:
+        query = "SELECT * FROM events WHERE public_fg = true ORDER BY id ASC"
+    else:
+        query = "SELECT * FROM events ORDER BY id ASC"
+    cur.execute(query)
+    events = { row["id"]: row for row in cur.fetchall() }
+    sheets = { row["id"]: row for row in get_sheets() }
+    cur.execute("SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)")
+    reservations = cur.fetchall()
+
+    for event in events.values():
+        event["total"] = 0
+        event["remains"] = 0
+        event["sheets"] = {}
+        for rank in ["S", "A", "B", "C"]:
+            event["sheets"][rank] = {'total': 0, 'remains': 0}
+
+        event['public'] = True if event['public_fg'] else False
+        event['closed'] = True if event['closed_fg'] else False
+        del event['public_fg']
+        del event['closed_fg']
+
+        for sheet in sheets.values():
+            if not event['sheets'][sheet['rank']].get('price'):
+                event['sheets'][sheet['rank']]['price'] = event['price'] + sheet['price']
+            event['total'] += 1
+            event['remains'] += 1
+            event['sheets'][sheet['rank']]['total'] += 1
+            event['sheets'][sheet['rank']]['remains'] += 1
+
+    for reservation in reservations:
+        if reservation["event_id"] not in events:
+            continue
+        event = events[reservation["event_id"]]
+        sheet = sheets[reservation["sheet_id"]]
+        event['remains'] -= 1
+        event['sheets'][sheet['rank']]['remains'] -= 1
+
+    return list(events.values())
 
 _sheets = None
 def get_sheets():
@@ -125,11 +148,21 @@ def get_sheets():
         _sheets = [ dict(sheet) for sheet in cur.fetchall() ]
     return _sheets
 
-def get_event(event_id, login_user_id=None):
+def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     cur = dbh().cursor()
-    cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
-    event = cur.fetchone()
-    if not event: return None
+
+    if event is None:
+        if cache:
+            if not hasattr(flask.g, 'events'):
+                cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events")
+                flask.g.events = { row["id"]: row for row in cur.fetchall() }
+            event = flask.g.events.get(event_id)
+            if not event: return None
+            event = dict(event)
+        else:
+            del flask.g.events
+            cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
+            event = cur.fetchone()
 
     event["total"] = 0
     event["remains"] = 0
@@ -227,7 +260,7 @@ def render_report_csv(reports):
 def get_index():
     user = get_login_user()
     events = []
-    for event in get_events(lambda e: e["public_fg"]):
+    for event in get_events(only_public=True):
         events.append(sanitize_event(event))
     return flask.render_template('index.html', user=user, events=events, base_url=make_base_url(flask.request))
 
@@ -344,7 +377,7 @@ def post_logout():
 @app.route('/api/events')
 def get_events_api():
     events = []
-    for event in get_events(lambda e: e["public_fg"]):
+    for event in get_events(only_public=True):
         events.append(sanitize_event(event))
     return jsonify(events)
 
@@ -352,7 +385,7 @@ def get_events_api():
 @app.route('/api/events/<int:event_id>')
 def get_events_by_id(event_id):
     user = get_login_user()
-    if user: event = get_event(event_id, user['id'])
+    if user: event = get_event(event_id, login_user_id=user['id'])
     else: event = get_event(event_id)
 
     if not event or not event["public"]:
@@ -368,7 +401,7 @@ def post_reserve(event_id):
     rank = flask.request.json["sheet_rank"]
 
     user = get_login_user()
-    event = get_event(event_id, user['id'])
+    event = get_event(event_id, login_user_id=user['id'])
 
     if not event or not event['public']:
         return res_error("invalid_event", 404)
@@ -409,7 +442,7 @@ def get_sheet_from_rank_and_num(rank, num):
 @login_required
 def delete_reserve(event_id, rank, num):
     user = get_login_user()
-    event = get_event(event_id, user['id'])
+    event = get_event(event_id, login_user_id=user['id'])
 
     if not event or not event['public']:
         return res_error("invalid_event", 404)
