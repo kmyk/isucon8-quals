@@ -278,18 +278,15 @@ def post_users():
     password = flask.request.json['password']
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
     cur.execute("SELECT login_name FROM users WHERE login_name = %s", [login_name])
     duplicated = cur.fetchone()
     if duplicated:
-        conn.rollback()
         return res_error('duplicated', 409)
     cur.execute(
         "INSERT INTO users (login_name, pass_hash, nickname) VALUES (%s, SHA2(%s, 256), %s)",
         [login_name, password, nickname])
     user_id = cur.lastrowid
-    conn.commit()
     return (jsonify({"id": user_id, "nickname": nickname}), 201)
 
 
@@ -454,7 +451,6 @@ def delete_reserve(event_id, rank, num):
         return res_error("invalid_sheet", 404)
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
 
     cur.execute(
@@ -463,16 +459,13 @@ def delete_reserve(event_id, rank, num):
     reservation = cur.fetchone()
 
     if not reservation:
-        conn.rollback()
         return res_error("not_reserved", 400)
     if reservation['user_id'] != user['id']:
-        conn.rollback()
         return res_error("not_permitted", 403)
 
     cur.execute(
         "UPDATE reservations SET canceled_at = %s WHERE id = %s",
         [datetime.utcnow().strftime("%F %T.%f"), reservation['id']])
-    conn.commit()
 
     return flask.Response(status=204)
 
