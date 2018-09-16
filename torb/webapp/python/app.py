@@ -272,21 +272,17 @@ def post_users():
     password = flask.request.json['password']
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
     try:
         cur.execute("SELECT login_name FROM users WHERE login_name = %s", [login_name])
         duplicated = cur.fetchone()
         if duplicated:
-            conn.rollback()
             return res_error('duplicated', 409)
         cur.execute(
             "INSERT INTO users (login_name, pass_hash, nickname) VALUES (%s, SHA2(%s, 256), %s)",
             [login_name, password, nickname])
         user_id = cur.lastrowid
-        conn.commit()
     except MySQLdb.Error as e:
-        conn.rollback()
         print(e)
         return res_error()
     return (jsonify({"id": user_id, "nickname": nickname}), 201)
@@ -424,15 +420,12 @@ def post_reserve(event_id):
         if not sheet:
             return res_error("sold_out", 409)
         try:
-            conn.autocommit(False)
             cur = conn.cursor()
             cur.execute(
                 "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (%s, %s, %s, %s)",
                 [event['id'], sheet['id'], user['id'], datetime.utcnow().strftime("%F %T.%f")])
             reservation_id = cur.lastrowid
-            conn.commit()
         except MySQLdb.Error as e:
-            conn.rollback()
             print(e)
         break
 
@@ -466,7 +459,6 @@ def delete_reserve(event_id, rank, num):
 
     try:
         conn = dbh()
-        conn.autocommit(False)
         cur = conn.cursor()
 
         cur.execute(
@@ -475,18 +467,14 @@ def delete_reserve(event_id, rank, num):
         reservation = cur.fetchone()
 
         if not reservation:
-            conn.rollback()
             return res_error("not_reserved", 400)
         if reservation['user_id'] != user['id']:
-            conn.rollback()
             return res_error("not_permitted", 403)
 
         cur.execute(
             "UPDATE reservations SET canceled_at = %s WHERE id = %s",
             [datetime.utcnow().strftime("%F %T.%f"), reservation['id']])
-        conn.commit()
     except MySQLdb.Error as e:
-        conn.rollback()
         print(e)
         return res_error()
 
@@ -540,16 +528,13 @@ def post_admin_events_api():
     price = flask.request.json['price']
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
     try:
         cur.execute(
             "INSERT INTO events (title, public_fg, closed_fg, price) VALUES (%s, %s, 0, %s)",
             [title, public, price])
         event_id = cur.lastrowid
-        conn.commit()
     except MySQLdb.Error as e:
-        conn.rollback()
         print(e)
     return jsonify(get_event(event_id))
 
@@ -580,15 +565,10 @@ def post_event_edit(event_id):
         return res_error('cannot_close_public_event', 400)
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
-    try:
-        cur.execute(
-            "UPDATE events SET public_fg = %s, closed_fg = %s WHERE id = %s",
-            [public, closed, event['id']])
-        conn.commit()
-    except MySQLdb.Error as e:
-        conn.rollback()
+    cur.execute(
+        "UPDATE events SET public_fg = %s, closed_fg = %s WHERE id = %s",
+        [public, closed, event['id']])
     return jsonify(get_event(event_id, cache=False))
 
 
