@@ -234,7 +234,7 @@ def get_index():
 
 @app.route('/initialize')
 def get_initialize():
-    subprocess.call(["../../db/init.sh"])
+    subprocess.call(["ssh", "172.18.105.2", "./torb/db/init.sh"])
     return ('', 204)
 
 
