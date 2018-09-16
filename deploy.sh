@@ -10,9 +10,11 @@ scp torb/db/schema.sql isucon@${ip1}:torb/db/
 scp torb/webapp/env.sh isucon@${ip1}:torb/webapp/
 scp torb/webapp/python/app.py isucon@${ip1}:torb/webapp/python/
 scp -r torb/webapp/python/templates isucon@${ip1}:torb/webapp/python/
+scp etc/systemd/system/torb.python.service isucon@${ip1}:etc/systemd/system/
 
 ssh isucon@${ip} <<EOF
 set -e
+sudo cp etc/systemd/system/torb.python.service /etc/systemd/system/torb.python.service
 sudo systemctl daemon-reload
 sudo systemctl restart mariadb
 sudo systemctl restart torb.python.service
