@@ -195,12 +195,12 @@ def get_login_administrator():
     cur.execute("SELECT id, nickname FROM administrators WHERE id = %s", [administrator_id])
     return cur.fetchone()
 
-
+_total_sheets = None
 def validate_rank(rank):
-    cur = dbh().cursor()
-    cur.execute("SELECT COUNT(*) AS total_sheets FROM sheets WHERE `rank` = %s", [rank])
-    ret = cur.fetchone()
-    return int(ret['total_sheets']) > 0
+    global _total_sheets
+    if _total_sheets is None:
+        _total_sheets = { sheet['rank'] for sheet in get_sheets() }
+    return rank in _total_sheets
 
 
 def render_report_csv(reports):
@@ -411,6 +411,12 @@ def post_reserve(event_id):
         "sheet_num": sheet['num']})
     return flask.Response(content, status=202, mimetype='application/json')
 
+_sheet_from_rank_and_num = None
+def get_sheet_from_rank_and_num(rank, num):
+    global _sheet_from_rank_and_num
+    if _sheet_from_rank_and_num is None:
+        _sheet_from_rank_and_num = { '%s%d' % (sheet['rank'], sheet['num']): sheet for sheet in get_sheets() }
+    return _sheet_from_rank_and_num.get('%s%d' % (rank, num))
 
 @app.route('/api/events/<int:event_id>/sheets/<rank>/<int:num>/reservation', methods=['DELETE'])
 @login_required
@@ -423,9 +429,13 @@ def delete_reserve(event_id, rank, num):
     if not validate_rank(rank):
         return res_error("invalid_rank", 404)
 
+<<<<<<< HEAD
     cur = dbh().cursor()
     cur.execute('SELECT id, `rank`, num FROM sheets WHERE `rank` = %s AND num = %s', [rank, num])
     sheet = cur.fetchone()
+=======
+    sheet = get_sheet_from_rank_and_num(rank, num)
+>>>>>>> 追加でsheetsへのDBアクセスを削減
     if not sheet:
         return res_error("invalid_sheet", 404)
 
