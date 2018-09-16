@@ -6,6 +6,7 @@ import pathlib
 import copy
 import json
 import subprocess
+import hashlib
 from io import StringIO
 import csv
 from datetime import datetime, timezone
@@ -323,13 +324,11 @@ def post_login():
 
     cur.execute('SELECT * FROM users WHERE login_name = %s', [login_name])
     user = cur.fetchone()
-    cur.execute('SELECT SHA2(%s, 256) AS pass_hash', [password])
-    pass_hash = cur.fetchone()
-    if not user or pass_hash['pass_hash'] != user['pass_hash']:
+    pass_hash = hashlib.sha256(password.encode()).hexdigest()
+    if not user or pass_hash != user['pass_hash']:
         return res_error("authentication_failed", 401)
 
     flask.session['user_id'] = user["id"]
-    user = get_login_user()
     return flask.jsonify(user)
 
 
@@ -469,14 +468,12 @@ def post_adin_login():
 
     cur.execute('SELECT * FROM administrators WHERE login_name = %s', [login_name])
     administrator = cur.fetchone()
-    cur.execute('SELECT SHA2(%s, 256) AS pass_hash', [password])
-    pass_hash = cur.fetchone()
+    pass_hash = hashlib.sha256(password.encode()).hexdigest()
 
-    if not administrator or pass_hash['pass_hash'] != administrator['pass_hash']:
+    if not administrator or pass_hash != administrator['pass_hash']:
         return res_error("authentication_failed", 401)
 
     flask.session['administrator_id'] = administrator['id']
-    administrator = get_login_administrator()
     return jsonify(administrator)
 
 
