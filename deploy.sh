@@ -9,7 +9,6 @@ ip=${1:-$ip1}
 echo "target ip = $ip"
 
 scp -r etc isucon@${ip}:
-scp torb/db/schema.sql isucon@${ip}:torb/db/
 scp torb/webapp/env.sh isucon@${ip}:torb/webapp/
 scp torb/webapp/python/app.py isucon@${ip}:torb/webapp/python/
 scp -r torb/webapp/python/templates isucon@${ip}:torb/webapp/python/
@@ -21,8 +20,6 @@ set -e
 sudo cp etc/systemd/system/torb.python.service /etc/systemd/system/torb.python.service
 sudo cp etc/h2o/h2o.conf /etc/h2o/h2o.conf
 sudo systemctl daemon-reload
-sudo systemctl restart mariadb
 sudo systemctl restart torb.python.service
 sudo systemctl restart h2o
-./torb/db/init.sh
 EOF
