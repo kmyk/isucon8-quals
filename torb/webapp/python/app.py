@@ -105,16 +105,19 @@ def get_events(only_public=False):
         query = "SELECT * FROM events ORDER BY id ASC"
     cur.execute(query)
     events = { row["id"]: row for row in cur.fetchall() }
-    sheets = { row["id"]: row for row in get_sheets() }
-    cur.execute("SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)")
+    sheets = get_sheets_dict()
+
+    if only_public:
+        cur.execute("SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id IN (-1,%s) AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)" % ','.join(map(str, events.keys())))
+    else:
+        cur.execute("SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)")
     reservations = cur.fetchall()
 
     for event in events.values():
         event["total"] = 0
-        event["remains"] = 0
         event["sheets"] = {}
         for rank in ["S", "A", "B", "C"]:
-            event["sheets"][rank] = {'total': 0, 'remains': 0}
+            event["sheets"][rank] = {'total': 0}
 
         event['public'] = True if event['public_fg'] else False
         event['closed'] = True if event['closed_fg'] else False
@@ -125,13 +128,13 @@ def get_events(only_public=False):
             if not event['sheets'][sheet['rank']].get('price'):
                 event['sheets'][sheet['rank']]['price'] = event['price'] + sheet['price']
             event['total'] += 1
-            event['remains'] += 1
             event['sheets'][sheet['rank']]['total'] += 1
-            event['sheets'][sheet['rank']]['remains'] += 1
+
+        event["remains"] = event['total']
+        for rank in ["S", "A", "B", "C"]:
+            event["sheets"][rank]['remains'] = event["sheets"][rank]['total']
 
     for reservation in reservations:
-        if reservation["event_id"] not in events:
-            continue
         event = events[reservation["event_id"]]
         sheet = sheets[reservation["sheet_id"]]
         event['remains'] -= 1
@@ -147,6 +150,15 @@ def get_sheets():
         cur.execute("SELECT * FROM sheets ORDER BY `rank`, num")
         _sheets = [ dict(sheet) for sheet in cur.fetchall() ]
     return _sheets
+
+_sheets_dict = None
+def get_sheets_dict():
+    global _sheets_dict
+    if _sheets_dict is None:
+        cur = dbh().cursor()
+        cur.execute("SELECT * FROM sheets ORDER BY `rank`, num")
+        _sheets_dict = { sheet["id"]: dict(sheet) for sheet in cur.fetchall() }
+    return _sheets_dict
 
 def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     cur = dbh().cursor()
