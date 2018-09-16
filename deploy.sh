@@ -11,7 +11,8 @@ echo "target ip = $ip"
 scp -r etc isucon@${ip}:
 scp torb/db/schema.sql isucon@${ip}:torb/db/
 scp torb/webapp/env.sh isucon@${ip}:torb/webapp/
-scp torb/webapp/python/app.py isucon@${ip}:torb/webapp/python/
+scp torb/webapp/python/*.py isucon@${ip}:torb/webapp/python/
+scp torb/webapp/python/*.sh isucon@${ip}:torb/webapp/python/
 scp -r torb/webapp/python/templates isucon@${ip}:torb/webapp/python/
 scp etc/systemd/system/torb.python.service isucon@${ip}:etc/systemd/system/
 scp etc/h2o/h2o.conf isucon@${ip}:etc/h2o/
