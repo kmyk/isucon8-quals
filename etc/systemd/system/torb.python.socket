@@ -2,7 +2,7 @@
 Description=torb.python socket
 
 [Socket]
-ListenStream=/run/torb.python/socket
+ListenStream=/home/isucon/run/torb.python/socket
 
 [Install]
 WantedBy=sockets.target
