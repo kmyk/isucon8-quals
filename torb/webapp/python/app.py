@@ -247,21 +247,16 @@ def post_users():
     conn = dbh()
     conn.autocommit(False)
     cur = conn.cursor()
-    try:
-        cur.execute("SELECT login_name FROM users WHERE login_name = %s", [login_name])
-        duplicated = cur.fetchone()
-        if duplicated:
-            conn.rollback()
-            return res_error('duplicated', 409)
-        cur.execute(
-            "INSERT INTO users (login_name, pass_hash, nickname) VALUES (%s, SHA2(%s, 256), %s)",
-            [login_name, password, nickname])
-        user_id = cur.lastrowid
-        conn.commit()
-    except MySQLdb.Error as e:
+    cur.execute("SELECT login_name FROM users WHERE login_name = %s", [login_name])
+    duplicated = cur.fetchone()
+    if duplicated:
         conn.rollback()
-        print(e)
-        return res_error()
+        return res_error('duplicated', 409)
+    cur.execute(
+        "INSERT INTO users (login_name, pass_hash, nickname) VALUES (%s, SHA2(%s, 256), %s)",
+        [login_name, password, nickname])
+    user_id = cur.lastrowid
+    conn.commit()
     return (jsonify({"id": user_id, "nickname": nickname}), 201)
 
 
@@ -383,27 +378,19 @@ def post_reserve(event_id):
     sheet = None
     reservation_id = 0
 
-    while True:
-        conn =  dbh()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, `rank`, num FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = %s AND canceled_at IS NULL FOR UPDATE) AND `rank` =%s ORDER BY RAND() LIMIT 1",
-            [event['id'], rank])
-        sheet = cur.fetchone()
-        if not sheet:
-            return res_error("sold_out", 409)
-        try:
-            conn.autocommit(False)
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (%s, %s, %s, %s)",
-                [event['id'], sheet['id'], user['id'], datetime.utcnow().strftime("%F %T.%f")])
-            reservation_id = cur.lastrowid
-            conn.commit()
-        except MySQLdb.Error as e:
-            conn.rollback()
-            print(e)
-        break
+    conn =  dbh()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, `rank`, num FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = %s AND canceled_at IS NULL FOR UPDATE) AND `rank` =%s ORDER BY RAND() LIMIT 1",
+        [event['id'], rank])
+    sheet = cur.fetchone()
+    if not sheet:
+        return res_error("sold_out", 409)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (%s, %s, %s, %s)",
+        [event['id'], sheet['id'], user['id'], datetime.utcnow().strftime("%F %T.%f")])
+    reservation_id = cur.lastrowid
 
     content = jsonify({
         "id": reservation_id,
@@ -433,31 +420,26 @@ def delete_reserve(event_id, rank, num):
     if not sheet:
         return res_error("invalid_sheet", 404)
 
-    try:
-        conn = dbh()
-        conn.autocommit(False)
-        cur = conn.cursor()
+    conn = dbh()
+    conn.autocommit(False)
+    cur = conn.cursor()
 
-        cur.execute(
-            "SELECT id, event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE",
-            [event['id'], sheet['id']])
-        reservation = cur.fetchone()
+    cur.execute(
+        "SELECT id, event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE",
+        [event['id'], sheet['id']])
+    reservation = cur.fetchone()
 
-        if not reservation:
-            conn.rollback()
-            return res_error("not_reserved", 400)
-        if reservation['user_id'] != user['id']:
-            conn.rollback()
-            return res_error("not_permitted", 403)
-
-        cur.execute(
-            "UPDATE reservations SET canceled_at = %s WHERE id = %s",
-            [datetime.utcnow().strftime("%F %T.%f"), reservation['id']])
-        conn.commit()
-    except MySQLdb.Error as e:
+    if not reservation:
         conn.rollback()
-        print(e)
-        return res_error()
+        return res_error("not_reserved", 400)
+    if reservation['user_id'] != user['id']:
+        conn.rollback()
+        return res_error("not_permitted", 403)
+
+    cur.execute(
+        "UPDATE reservations SET canceled_at = %s WHERE id = %s",
+        [datetime.utcnow().strftime("%F %T.%f"), reservation['id']])
+    conn.commit()
 
     return flask.Response(status=204)
 
@@ -509,17 +491,11 @@ def post_admin_events_api():
     price = flask.request.json['price']
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
-    try:
-        cur.execute(
-            "INSERT INTO events (title, public_fg, closed_fg, price) VALUES (%s, %s, 0, %s)",
-            [title, public, price])
-        event_id = cur.lastrowid
-        conn.commit()
-    except MySQLdb.Error as e:
-        conn.rollback()
-        print(e)
+    cur.execute(
+        "INSERT INTO events (title, public_fg, closed_fg, price) VALUES (%s, %s, 0, %s)",
+        [title, public, price])
+    event_id = cur.lastrowid
     return jsonify(get_event(event_id))
 
 
@@ -549,15 +525,10 @@ def post_event_edit(event_id):
         return res_error('cannot_close_public_event', 400)
 
     conn = dbh()
-    conn.autocommit(False)
     cur = conn.cursor()
-    try:
-        cur.execute(
-            "UPDATE events SET public_fg = %s, closed_fg = %s WHERE id = %s",
-            [public, closed, event['id']])
-        conn.commit()
-    except MySQLdb.Error as e:
-        conn.rollback()
+    cur.execute(
+        "UPDATE events SET public_fg = %s, closed_fg = %s WHERE id = %s",
+        [public, closed, event['id']])
     return jsonify(get_event(event_id))
 
 
@@ -617,4 +588,4 @@ def get_admin_sales():
 
 
 if __name__ == "__main__":
-    app.run(port=8080, debug=True, threaded=True)
+    app.run(port=8080, debug=False, threaded=True)
