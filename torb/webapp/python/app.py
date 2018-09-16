@@ -101,12 +101,11 @@ def get_events(filter=lambda e: True):
     conn.autocommit(False)
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, public_fg FROM events ORDER BY id ASC") # public_fgは一部のみフィルタで使われている
+        cur.execute("SELECT * FROM events ORDER BY id ASC") # public_fgは一部のみフィルタで使われている
         rows = cur.fetchall()
-        event_ids = [row['id'] for row in rows if filter(row)]
         events = []
-        for event_id in event_ids:
-            event = get_event(event_id)
+        for event in rows:
+            event = get_event(event=event)
             for sheet in event['sheets'].values():
                 del sheet['detail']
             events.append(event)
@@ -125,20 +124,21 @@ def get_sheets():
         _sheets = [ dict(sheet) for sheet in cur.fetchall() ]
     return _sheets
 
-def get_event(event_id, login_user_id=None, cache=True):
+def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     cur = dbh().cursor()
 
-    if cache:
-        if not hasattr(flask.g, 'events'):
-            cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events")
-            flask.g.events = { row["id"]: row for row in cur.fetchall() }
-        event = flask.g.events.get(event_id)
-        if not event: return None
-        event = dict(event)
-    else:
-        del flask.g.events
-        cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
-        event = cur.fetchone()
+    if event is None:
+        if cache:
+            if not hasattr(flask.g, 'events'):
+                cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events")
+                flask.g.events = { row["id"]: row for row in cur.fetchall() }
+            event = flask.g.events.get(event_id)
+            if not event: return None
+            event = dict(event)
+        else:
+            del flask.g.events
+            cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
+            event = cur.fetchone()
 
     event["total"] = 0
     event["remains"] = 0
@@ -366,7 +366,7 @@ def get_events_api():
 @app.route('/api/events/<int:event_id>')
 def get_events_by_id(event_id):
     user = get_login_user()
-    if user: event = get_event(event_id, user['id'])
+    if user: event = get_event(event_id, login_user_id=user['id'])
     else: event = get_event(event_id)
 
     if not event or not event["public"]:
@@ -382,7 +382,7 @@ def post_reserve(event_id):
     rank = flask.request.json["sheet_rank"]
 
     user = get_login_user()
-    event = get_event(event_id, user['id'])
+    event = get_event(event_id, login_user_id=user['id'])
 
     if not event or not event['public']:
         return res_error("invalid_event", 404)
@@ -431,7 +431,7 @@ def get_sheet_from_rank_and_num(rank, num):
 @login_required
 def delete_reserve(event_id, rank, num):
     user = get_login_user()
-    event = get_event(event_id, user['id'])
+    event = get_event(event_id, login_user_id=user['id'])
 
     if not event or not event['public']:
         return res_error("invalid_event", 404)
