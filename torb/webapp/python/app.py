@@ -100,7 +100,7 @@ def get_events(filter=lambda e: True):
     conn.autocommit(False)
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM events ORDER BY id ASC")
+        cur.execute("SELECT id, public_fg FROM events ORDER BY id ASC") # public_fgは一部のみフィルタで使われている
         rows = cur.fetchall()
         event_ids = [row['id'] for row in rows if filter(row)]
         events = []
@@ -118,7 +118,7 @@ def get_events(filter=lambda e: True):
 
 def get_event(event_id, login_user_id=None):
     cur = dbh().cursor()
-    cur.execute("SELECT * FROM events WHERE id = %s", [event_id])
+    cur.execute("SELECT title, id, public_fg, closed_fg, price FROM events WHERE id = %s", [event_id])
     event = cur.fetchone()
     if not event: return None
 
@@ -128,7 +128,7 @@ def get_event(event_id, login_user_id=None):
     for rank in ["S", "A", "B", "C"]:
         event["sheets"][rank] = {'total': 0, 'remains': 0, 'detail': []}
 
-    cur.execute("SELECT * FROM sheets ORDER BY `rank`, num")
+    cur.execute("SELECT id, `rank`, num, price FROM sheets ORDER BY `rank`, num")
     sheets = cur.fetchall()
     for sheet in sheets:
         if not event['sheets'][sheet['rank']].get('price'):
@@ -137,7 +137,7 @@ def get_event(event_id, login_user_id=None):
         event['sheets'][sheet['rank']]['total'] += 1
 
         cur.execute(
-            "SELECT * FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)",
+            "SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)",
             [event['id'], sheet['id']])
         reservation = cur.fetchone()
         if reservation:
@@ -240,7 +240,7 @@ def post_users():
     conn.autocommit(False)
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM users WHERE login_name = %s", [login_name])
+        cur.execute("SELECT login_name FROM users WHERE login_name = %s", [login_name])
         duplicated = cur.fetchone()
         if duplicated:
             conn.rollback()
@@ -321,7 +321,7 @@ def post_login():
 
     cur = dbh().cursor()
 
-    cur.execute('SELECT * FROM users WHERE login_name = %s', [login_name])
+    cur.execute('SELECT id, nickname, login_name, pass_hash FROM users WHERE login_name = %s', [login_name])
     user = cur.fetchone()
     cur.execute('SELECT SHA2(%s, 256) AS pass_hash', [password])
     pass_hash = cur.fetchone()
@@ -381,7 +381,7 @@ def post_reserve(event_id):
         conn =  dbh()
         cur = conn.cursor()
         cur.execute(
-            "SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = %s AND canceled_at IS NULL FOR UPDATE) AND `rank` =%s ORDER BY RAND() LIMIT 1",
+            "SELECT id, `rank`, num FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = %s AND canceled_at IS NULL FOR UPDATE) AND `rank` =%s ORDER BY RAND() LIMIT 1",
             [event['id'], rank])
         sheet = cur.fetchone()
         if not sheet:
@@ -418,7 +418,7 @@ def delete_reserve(event_id, rank, num):
         return res_error("invalid_rank", 404)
 
     cur = dbh().cursor()
-    cur.execute('SELECT * FROM sheets WHERE `rank` = %s AND num = %s', [rank, num])
+    cur.execute('SELECT id, `rank`, num FROM sheets WHERE `rank` = %s AND num = %s', [rank, num])
     sheet = cur.fetchone()
     if not sheet:
         return res_error("invalid_sheet", 404)
@@ -429,7 +429,7 @@ def delete_reserve(event_id, rank, num):
         cur = conn.cursor()
 
         cur.execute(
-            "SELECT * FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE",
+            "SELECT id, event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE",
             [event['id'], sheet['id']])
         reservation = cur.fetchone()
 
@@ -467,7 +467,7 @@ def post_adin_login():
 
     cur = dbh().cursor()
 
-    cur.execute('SELECT * FROM administrators WHERE login_name = %s', [login_name])
+    cur.execute('SELECT id, nickname, login_name, pass_hash FROM administrators WHERE login_name = %s', [login_name])
     administrator = cur.fetchone()
     cur.execute('SELECT SHA2(%s, 256) AS pass_hash', [password])
     pass_hash = cur.fetchone()
