@@ -170,6 +170,9 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     for rank in ["S", "A", "B", "C"]:
         event["sheets"][rank] = {'total': 0, 'remains': 0, 'detail': []}
 
+    cur.execute("SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", [event['id']])
+    reservations = { row["sheet_id"]: row for row in cur.fetchall() }
+
     for sheet in get_sheets():
         sheet = dict(sheet)
         if not event['sheets'][sheet['rank']].get('price'):
@@ -177,10 +180,7 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
         event['total'] += 1
         event['sheets'][sheet['rank']]['total'] += 1
 
-        cur.execute(
-            "SELECT event_id, sheet_id, user_id, reserved_at, canceled_at FROM reservations WHERE event_id = %s AND sheet_id = %s AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)",
-            [event['id'], sheet['id']])
-        reservation = cur.fetchone()
+        reservation = reservations.get(sheet["id"])
         if reservation:
             if login_user_id and reservation['user_id'] == login_user_id:
                 sheet['mine'] = True
@@ -201,14 +201,6 @@ def get_event(event_id=None, event=None, login_user_id=None, cache=True):
     del event['public_fg']
     del event['closed_fg']
     return event
-
-
-def sanitize_event(event):
-    sanitized = copy.copy(event)
-    del sanitized['price']
-    del sanitized['public']
-    del sanitized['closed']
-    return sanitized
 
 
 def get_login_user():
@@ -259,9 +251,11 @@ def render_report_csv(reports):
 @app.route('/')
 def get_index():
     user = get_login_user()
-    events = []
-    for event in get_events(only_public=True):
-        events.append(sanitize_event(event))
+    events = get_events(only_public=True)
+    for event in events:
+        del event['price']
+        del event['public']
+        del event['closed']
     return flask.render_template('index.html', user=user, events=events, base_url=make_base_url(flask.request))
 
 
@@ -381,9 +375,11 @@ def post_logout():
 
 @app.route('/api/events')
 def get_events_api():
-    events = []
-    for event in get_events(only_public=True):
-        events.append(sanitize_event(event))
+    events = get_events(only_public=True)
+    for event in events:
+        del event['price']
+        del event['public']
+        del event['closed']
     return jsonify(events)
 
 
@@ -396,7 +392,9 @@ def get_events_by_id(event_id):
     if not event or not event["public"]:
         return res_error("not_found", 404)
 
-    event = sanitize_event(event)
+    del event['price']
+    del event['public']
+    del event['closed']
     return jsonify(event)
 
 
