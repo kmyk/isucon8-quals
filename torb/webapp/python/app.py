@@ -429,13 +429,7 @@ def delete_reserve(event_id, rank, num):
     if not validate_rank(rank):
         return res_error("invalid_rank", 404)
 
-<<<<<<< HEAD
-    cur = dbh().cursor()
-    cur.execute('SELECT id, `rank`, num FROM sheets WHERE `rank` = %s AND num = %s', [rank, num])
-    sheet = cur.fetchone()
-=======
     sheet = get_sheet_from_rank_and_num(rank, num)
->>>>>>> 追加でsheetsへのDBアクセスを削減
     if not sheet:
         return res_error("invalid_sheet", 404)
 
